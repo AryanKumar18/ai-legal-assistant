@@ -1,0 +1,31 @@
+cat > backend/.gitignore << 'EOF'
+# Virtual environment
+venv/
+env/
+
+# Environment variables
+.env
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Database
+*.db
+*.sqlite3
+
+# Uploads (don't push user files)
+uploads/
+
+# ChromaDB vector store
+chroma_db/
+
+# Alembic
+# Keep alembic folder but ignore pyc files
+
+# OS
+.DS_Store
+EOF
