@@ -51,21 +51,23 @@ export default function DocumentDetail() {
     <div className={`min-h-screen ${pageBg} transition-colors duration-200`}>
 
       {/* Header */}
-      <div className={`${headerBg} border-b px-8 py-4 transition-colors duration-200`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
+      <div className={`${headerBg} border-b px-4 md:px-8 py-4 transition-colors duration-200`}>
+
+        {/* Top row */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-2 md:gap-4 min-w-0">
             <button
               onClick={() => navigate('/dashboard')}
-              className={`text-sm flex items-center gap-1 ${headerMuted} hover:text-indigo-500 transition`}
+              className={`text-sm flex items-center gap-1 flex-shrink-0 ${headerMuted} hover:text-indigo-500 transition`}
             >
-              ← Back to Documents
+              ← Back
             </button>
-            <h1 className={`text-lg font-semibold ${headerText}`}>
+            <h1 className={`text-sm md:text-lg font-semibold truncate ${headerText}`}>
               {document?.original_filename}
             </h1>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-shrink-0">
             <span className={`text-xs px-2 py-1 rounded-full font-medium ${
               document?.status === 'processed'
                 ? 'bg-green-50 text-green-600'
@@ -77,25 +79,24 @@ export default function DocumentDetail() {
             {/* Dark Mode Toggle */}
             <button
               onClick={() => setDarkMode(!darkMode)}
-              className={`px-3 py-1.5 rounded-lg text-sm border transition ${
+              className={`px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm border transition ${
                 darkMode
                   ? 'bg-gray-700 border-gray-600 text-gray-300 hover:bg-gray-600'
                   : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
               }`}
-              title={darkMode ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
             >
               {darkMode ? '☀️ Light' : '🌙 Dark'}
             </button>
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-6 mt-4">
+        {/* Tabs — scrollable on mobile */}
+        <div className="flex gap-4 md:gap-6 mt-4 overflow-x-auto pb-1 scrollbar-hide">
           {TABS.map((tab) => (
             <button
               key={tab}
               onClick={() => setActiveTab(tab)}
-              className={`text-sm pb-2 font-medium border-b-2 transition ${
+              className={`text-sm pb-2 font-medium border-b-2 transition flex-shrink-0 ${
                 activeTab === tab ? tabActive : tabInactive
               }`}
             >
@@ -106,7 +107,7 @@ export default function DocumentDetail() {
       </div>
 
       {/* Tab Content */}
-      <div className={`p-8 transition-colors duration-200`}>
+      <div className="p-4 md:p-8 transition-colors duration-200">
         {activeTab === 'Overview' && <OverviewTab document={document} darkMode={darkMode} />}
         {activeTab === 'Summary' && <SummaryTab document={document} onUpdate={fetchDocument} darkMode={darkMode} />}
         {activeTab === 'Chat' && <ChatTab document={document} darkMode={darkMode} />}
@@ -126,7 +127,7 @@ function OverviewTab({ document, darkMode }) {
 
   return (
     <div className="w-full">
-      <div className={`rounded-xl border p-6 ${cardBg}`}>
+      <div className={`rounded-xl border p-4 md:p-6 ${cardBg}`}>
         <h2 className={`text-lg font-semibold mb-4 ${heading}`}>Document Overview</h2>
         <div className="space-y-3">
           {[
@@ -136,9 +137,9 @@ function OverviewTab({ document, darkMode }) {
             { label: 'Status', value: document.status },
             { label: 'Uploaded', value: new Date(document.uploaded_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }) },
           ].map(({ label, value }) => (
-            <div key={label} className={`flex justify-between py-2 border-b ${divider}`}>
-              <span className={`text-sm ${labelText}`}>{label}</span>
-              <span className={`text-sm font-medium ${valueText}`}>{value}</span>
+            <div key={label} className={`flex justify-between py-2 border-b gap-4 ${divider}`}>
+              <span className={`text-sm flex-shrink-0 ${labelText}`}>{label}</span>
+              <span className={`text-sm font-medium text-right truncate ${valueText}`}>{value}</span>
             </div>
           ))}
         </div>
@@ -154,9 +155,9 @@ function MetadataTab({ document, darkMode }) {
 
   return (
     <div className="w-full">
-      <div className={`rounded-xl border p-6 ${cardBg}`}>
+      <div className={`rounded-xl border p-4 md:p-6 ${cardBg}`}>
         <h2 className={`text-lg font-semibold mb-4 ${heading}`}>Metadata</h2>
-        <pre className={`text-sm rounded-lg p-4 overflow-auto ${codeBg}`}>
+        <pre className={`text-xs md:text-sm rounded-lg p-4 overflow-auto ${codeBg}`}>
           {JSON.stringify(document, null, 2)}
         </pre>
       </div>

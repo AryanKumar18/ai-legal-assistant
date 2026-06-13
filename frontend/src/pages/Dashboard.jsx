@@ -46,27 +46,28 @@ export default function Dashboard() {
 
   return (
     <div className="flex min-h-screen bg-gray-50">
-      <div className="w-64 flex-shrink-0"></div>  {/* spacer for fixed sidebar */}
-
+      <div className="hidden md:block w-64 flex-shrink-0"></div>
       <Sidebar />
 
-      <div className="flex-1 p-8">
+      <div className="flex-1 p-4 md:p-8">
 
-        <div className="flex items-center justify-between mb-8">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4 mt-14 md:mt-0">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
             <p className="text-gray-500 mt-1">Welcome back, {user?.full_name}!</p>
           </div>
           <button
             onClick={() => setShowUpload(true)}
-            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition"
+            className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition w-fit"
           >
             <span>+</span>
             Upload Document
           </button>
         </div>
 
-        <div className="grid grid-cols-4 gap-4 mb-8">
+        {/* Stats Grid */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
           <StatsCard
             label="Total Documents"
             value={documents.length}
@@ -93,6 +94,7 @@ export default function Dashboard() {
           />
         </div>
 
+        {/* Documents Table */}
         <div className="bg-white rounded-xl border border-gray-200">
           <div className="flex items-center justify-between p-6 border-b border-gray-100">
             <h2 className="font-semibold text-gray-900">Recent Documents</h2>
@@ -120,8 +122,8 @@ export default function Dashboard() {
                   <tr>
                     <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">Document Name</th>
                     <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">Type</th>
-                    <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">Size</th>
-                    <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">Uploaded On</th>
+                    <th className="text-left text-xs font-medium text-gray-500 px-6 py-3 hidden sm:table-cell">Size</th>
+                    <th className="text-left text-xs font-medium text-gray-500 px-6 py-3 hidden md:table-cell">Uploaded On</th>
                     <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">Status</th>
                     <th className="text-left text-xs font-medium text-gray-500 px-6 py-3">Actions</th>
                   </tr>
@@ -132,7 +134,7 @@ export default function Dashboard() {
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <span>{doc.file_type === 'pdf' ? '📄' : '📝'}</span>
-                          <span className="text-sm font-medium text-gray-900">
+                          <span className="text-sm font-medium text-gray-900 truncate max-w-[150px] md:max-w-none">
                             {doc.original_filename}
                           </span>
                         </div>
@@ -142,10 +144,10 @@ export default function Dashboard() {
                           {doc.file_type}
                         </span>
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
+                      <td className="px-6 py-4 text-sm text-gray-500 hidden sm:table-cell">
                         {doc.file_size} KB
                       </td>
-                      <td className="px-6 py-4 text-sm text-gray-500">
+                      <td className="px-6 py-4 text-sm text-gray-500 hidden md:table-cell">
                         {new Date(doc.uploaded_at).toLocaleDateString('en-IN', {
                           day: 'numeric',
                           month: 'short',
@@ -161,8 +163,6 @@ export default function Dashboard() {
                           {doc.status}
                         </span>
                       </td>
-
-                      {/* Action Buttons */}
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-2">
                           <button
