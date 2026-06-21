@@ -1,8 +1,11 @@
 from sqlalchemy import func
 from datetime import datetime, timedelta
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List
+import os
+import uuid
+import tempfile
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -19,8 +22,64 @@ from app.services.document_service import (
 
 router = APIRouter()
 
-# ─── Search document ─────────────────────────────────────
+def process_document_background(
+    document_id: int,
+    file_content: bytes,
+    ext: str,
+    file_type: str
+):
+    """Run in background after upload returns"""
+    from app.core.database import SessionLocal
+    from app.models.document import Document as DocModel
+    from app.services.extraction_service import extract_text_from_pdf, extract_text_from_docx
+    from app.services.chunking_service import chunk_document
+    from app.services.vector_service import add_chunks_to_vector_store
+    import tempfile
+    import os
 
+    db = SessionLocal()
+    try:
+        document = db.query(DocModel).filter(DocModel.id == document_id).first()
+        if not document:
+            return
+
+        # Extract text from file content in memory
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp.write(file_content)
+            tmp_path = tmp.name
+
+        try:
+            if file_type == "pdf":
+                text = extract_text_from_pdf(tmp_path)
+            else:
+                text = extract_text_from_docx(tmp_path)
+        finally:
+            os.remove(tmp_path)
+
+        if text:
+            # Chunk and embed into ChromaDB
+            chunks = chunk_document(text, document_id)
+            add_chunks_to_vector_store(chunks, document_id)
+            print(f"✅ Document {document_id} — {len(chunks)} chunks embedded in ChromaDB")
+
+        document.status = "processed"
+        db.commit()
+        print(f"✅ Document {document_id} processing complete")
+
+    except Exception as e:
+        print(f"Background processing error: {e}")
+        # Still mark as processed so user can use summarize/chat
+        try:
+            document = db.query(DocModel).filter(DocModel.id == document_id).first()
+            if document:
+                document.status = "processed"
+                db.commit()
+        except:
+            pass
+    finally:
+        db.close()
+
+# ─── Search Document ─────────────────────────────────────
 @router.get("/search")
 def search_documents(
     q: str = "",
@@ -35,17 +94,14 @@ def search_documents(
         DocModel.user_id == current_user.id
     )
 
-    # Search by filename
     if q:
         query = query.filter(
             DocModel.original_filename.ilike(f"%{q}%")
         )
 
-    # Filter by file type
     if file_type:
         query = query.filter(DocModel.file_type == file_type)
 
-    # Filter by status
     if status:
         query = query.filter(DocModel.status == status)
 
@@ -57,10 +113,12 @@ def search_documents(
         "query": q
     }
 
+
 # ─── Upload Document ─────────────────────────────────────
 @router.post("/upload", response_model=DocumentResponse)
 async def upload_document(
     file: UploadFile = File(...),
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
@@ -74,37 +132,51 @@ async def upload_document(
             detail="File size exceeds 10MB limit"
         )
 
-    unique_filename, file_path = save_file_to_disk(file_content, ext)
     file_type = "pdf" if ext == ".pdf" else "docx"
+    unique_filename = f"{uuid.uuid4()}{ext}"
 
-    document = create_document_record(
-        db=db,
+    # Upload to Cloudinary
+    cloudinary_url = None
+    cloudinary_public_id = None
+
+    try:
+        from app.services.cloudinary_service import upload_file_to_cloudinary
+        result = upload_file_to_cloudinary(file_content, unique_filename, ext)
+        cloudinary_url = result["url"]
+        cloudinary_public_id = result["public_id"]
+        file_path = cloudinary_url
+        print(f"Uploaded to Cloudinary: {cloudinary_url}")
+    except Exception as e:
+        print(f"Cloudinary failed: {e}, using local storage")
+        _, file_path = save_file_to_disk(file_content, ext)
+
+    # Save to DB immediately
+    from app.models.document import Document as DocModel
+    document = DocModel(
         user_id=current_user.id,
+        filename=unique_filename,
         original_filename=file.filename,
-        unique_filename=unique_filename,
         file_path=file_path,
+        cloudinary_url=cloudinary_url,
+        cloudinary_public_id=cloudinary_public_id,
         file_type=file_type,
-        file_size=file_size
+        file_size=round(file_size / 1024, 2),
+        status="processing"  # ← new status
+    )
+    db.add(document)
+    db.commit()
+    db.refresh(document)
+
+    # Process in background — doesn't block the response
+    background_tasks.add_task(
+        process_document_background,
+        document.id,
+        file_content,
+        ext,
+        file_type
     )
 
-    # Auto chunk and embed after upload
-    try:
-        from app.services.extraction_service import extract_text
-        from app.services.chunking_service import chunk_document
-        from app.services.vector_service import add_chunks_to_vector_store
-
-        text = extract_text(file_path, file_type)
-        if text:
-            chunks = chunk_document(text, document.id)
-            add_chunks_to_vector_store(chunks, document.id)
-            document.status = "processed"
-            db.commit()
-            db.refresh(document)
-    except Exception as e:
-        print(f"Chunking error: {e}")
-
     return document
-
 
 # ─── Get All Documents ───────────────────────────────────
 @router.get("/", response_model=DocumentListResponse)
@@ -138,6 +210,8 @@ def remove_document(
 ):
     return delete_document(db, document_id, current_user.id)
 
+
+# ─── Analytics ───────────────────────────────────────────
 @router.get("/analytics/stats")
 def get_analytics(
     db: Session = Depends(get_db),
@@ -145,18 +219,15 @@ def get_analytics(
 ):
     from app.models.document import Document as DocModel
 
-    # Total documents
     total_docs = db.query(DocModel).filter(
         DocModel.user_id == current_user.id
     ).count()
 
-    # Summaries generated
     summaries = db.query(DocModel).filter(
         DocModel.user_id == current_user.id,
         DocModel.summary != None
     ).count()
 
-    # Document types breakdown
     pdf_count = db.query(DocModel).filter(
         DocModel.user_id == current_user.id,
         DocModel.file_type == "pdf"
@@ -167,7 +238,6 @@ def get_analytics(
         DocModel.file_type == "docx"
     ).count()
 
-    # Documents per month (last 6 months)
     monthly_data = []
     for i in range(5, -1, -1):
         date = datetime.now() - timedelta(days=30 * i)

@@ -109,7 +109,8 @@ def send_message(
         else:
             raise Exception("No chunks")
     except Exception:
-        context = extract_text(document.file_path, document.file_type)
+        file_path = document.cloudinary_url if document.cloudinary_url else document.file_path
+        context = extract_text(file_path, document.file_type)
 
     # Save user message
     user_msg = ChatMessage(

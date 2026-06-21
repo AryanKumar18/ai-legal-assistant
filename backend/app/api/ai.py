@@ -1,6 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
+import tempfile
+import os
 
 from app.core.database import get_db
 from app.core.deps import get_current_user
@@ -17,6 +19,24 @@ from app.services.gemini_service import (
 router = APIRouter()
 
 
+def get_document_text(document):
+    """Extract text from a document, handling Cloudinary-stored files."""
+    if document.cloudinary_public_id:
+        from app.services.cloudinary_service import download_file_from_cloudinary
+        file_bytes = download_file_from_cloudinary(document.cloudinary_public_id)
+        ext = ".pdf" if document.file_type == "pdf" else ".docx"
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
+            tmp.write(file_bytes)
+            tmp_path = tmp.name
+        try:
+            text = extract_text(tmp_path, document.file_type)
+        finally:
+            os.remove(tmp_path)
+    else:
+        text = extract_text(document.file_path, document.file_type)
+    return text
+
+
 # ─── Summarize Document ──────────────────────────────────
 @router.post("/{document_id}/summarize")
 def summarize(
@@ -24,7 +44,6 @@ def summarize(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    # Get document
     document = db.query(Document).filter(
         Document.id == document_id,
         Document.user_id == current_user.id
@@ -33,15 +52,12 @@ def summarize(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    # Extract text
-    text = extract_text(document.file_path, document.file_type)
+    text = get_document_text(document)
     if not text:
         raise HTTPException(status_code=400, detail="Could not extract text from document")
 
-    # Generate summary
     summary = summarize_document(text)
 
-    # Save summary to DB
     document.summary = summary
     document.status = "processed"
     db.commit()
@@ -65,7 +81,7 @@ def risks(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    text = extract_text(document.file_path, document.file_type)
+    text = get_document_text(document)
     if not text:
         raise HTTPException(status_code=400, detail="Could not extract text")
 
@@ -107,13 +123,14 @@ def chat(
             raise Exception("No chunks found")
     except Exception:
         # Fallback to full text extraction
-        context = extract_text(document.file_path, document.file_type)
+        context = get_document_text(document)
 
     if not context:
         raise HTTPException(status_code=400, detail="Could not extract text")
 
     answer = answer_question(request.question, context)
     return {"answer": answer, "document_id": document_id}
+
 
 class SemanticSearchRequest(BaseModel):
     query: str

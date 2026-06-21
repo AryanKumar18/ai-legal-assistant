@@ -10,6 +10,7 @@ class DocumentResponse(BaseModel):
     file_size: Optional[float]
     status: str
     summary: Optional[str]
+    cloudinary_url: Optional[str]
     uploaded_at: datetime
 
     class Config:

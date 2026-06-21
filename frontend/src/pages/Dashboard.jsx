@@ -158,6 +158,8 @@ export default function Dashboard() {
                         <span className={`text-xs font-medium px-2 py-1 rounded-full capitalize ${
                           doc.status === 'processed'
                             ? 'bg-green-50 text-green-600'
+                            : doc.status === 'processing'
+                            ? 'bg-blue-50 text-blue-600'
                             : 'bg-yellow-50 text-yellow-600'
                         }`}>
                           {doc.status}

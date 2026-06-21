@@ -79,29 +79,33 @@ def get_document_by_id(db: Session, document_id: int, user_id: int):
 def delete_document(db: Session, document_id: int, user_id: int):
     document = get_document_by_id(db, document_id, user_id)
 
-    # Step 1 — Delete chat sessions (messages cascade automatically)
+    # Delete chat sessions first
     from app.models.chat import ChatSession
     chat_sessions = db.query(ChatSession).filter(
         ChatSession.document_id == document_id
     ).all()
     for session in chat_sessions:
         db.delete(session)
-
-    # Step 2 — Flush immediately so PostgreSQL removes sessions first
     db.flush()
 
-    # Step 3 — Delete vectors from ChromaDB
+    # Delete from Cloudinary if uploaded there
+    if document.cloudinary_public_id:
+        try:
+            from app.services.cloudinary_service import delete_file_from_cloudinary
+            delete_file_from_cloudinary(document.cloudinary_public_id)
+        except Exception as e:
+            print(f"Cloudinary delete error: {e}")
+    elif document.file_path and os.path.exists(document.file_path):
+        # Delete local file as fallback
+        os.remove(document.file_path)
+
+    # Delete vectors
     try:
         from app.services.vector_service import delete_document_vectors
         delete_document_vectors(document_id)
     except Exception as e:
         print(f"Vector delete error: {e}")
 
-    # Step 4 — Delete file from disk
-    if os.path.exists(document.file_path):
-        os.remove(document.file_path)
-
-    # Step 5 — Delete document record from DB
     db.delete(document)
     db.commit()
 
