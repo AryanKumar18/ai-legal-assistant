@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api import auth, documents, ai, chat
 from app.core.database import engine, Base
 from app.models import User, Document
+import os
 
 app = FastAPI(
     title="AI Legal Document Assistant",
@@ -10,9 +11,10 @@ app = FastAPI(
     version="1.0.0"
 )
 
+# Allow all origins for now — we'll restrict after deployment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000"],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
