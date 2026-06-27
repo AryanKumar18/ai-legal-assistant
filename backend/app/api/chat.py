@@ -97,6 +97,7 @@ def send_message(
         raise HTTPException(status_code=404, detail="Document not found")
 
     # Try RAG first
+    context = ""
     try:
         from app.services.vector_service import search_similar_chunks
         relevant_chunks = search_similar_chunks(
@@ -106,11 +107,24 @@ def send_message(
         )
         if relevant_chunks:
             context = "\n\n".join(relevant_chunks)
+            print(f"RAG context found: {len(relevant_chunks)} chunks")
         else:
             raise Exception("No chunks")
-    except Exception:
-        file_path = document.cloudinary_url if document.cloudinary_url else document.file_path
-        context = extract_text(file_path, document.file_type)
+    except Exception as rag_error:
+        print(f"RAG failed ({rag_error}), falling back to full text extraction")
+
+        # Get context — with better error logging
+        try:
+            file_path = document.cloudinary_url if document.cloudinary_url else document.file_path
+            print(f"Extracting text from: {file_path[:50]}")
+            context = extract_text(file_path, document.file_type)
+            print(f"Extracted {len(context)} characters")
+
+            if not context:
+                print("WARNING: No text extracted!")
+        except Exception as e:
+            print(f"Text extraction error: {e}")
+            context = ""
 
     # Save user message
     user_msg = ChatMessage(
@@ -138,6 +152,7 @@ def send_message(
 
     return {"answer": answer, "session_id": session.id}
 
+
 # ─── Delete Session ──────────────────────────────────────
 @router.delete("/sessions/{session_id}")
 def delete_session(
@@ -155,4 +170,3 @@ def delete_session(
     db.delete(session)
     db.commit()
     return {"message": "Chat deleted"}
-
