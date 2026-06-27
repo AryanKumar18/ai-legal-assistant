@@ -14,7 +14,11 @@ app = FastAPI(
 # Allow all origins for now — we'll restrict after deployment
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "http://localhost:5173",
+        "https://ai-legal-assistant-cdftlh9cr.vercel.app",
+        "*"
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
