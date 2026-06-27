@@ -28,12 +28,9 @@ def process_document_background(
     ext: str,
     file_type: str
 ):
-    """Run in background after upload returns"""
     from app.core.database import SessionLocal
     from app.models.document import Document as DocModel
     from app.services.extraction_service import extract_text_from_pdf, extract_text_from_docx
-    from app.services.chunking_service import chunk_document
-    from app.services.vector_service import add_chunks_to_vector_store
     import tempfile
     import os
 
@@ -43,7 +40,7 @@ def process_document_background(
         if not document:
             return
 
-        # Extract text from file content in memory
+        # Extract text
         with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as tmp:
             tmp.write(file_content)
             tmp_path = tmp.name
@@ -56,19 +53,24 @@ def process_document_background(
         finally:
             os.remove(tmp_path)
 
+        # Only try ChromaDB if available — skip if it fails
         if text:
-            # Chunk and embed into ChromaDB
-            chunks = chunk_document(text, document_id)
-            add_chunks_to_vector_store(chunks, document_id)
-            print(f"✅ Document {document_id} — {len(chunks)} chunks embedded in ChromaDB")
+            try:
+                from app.services.chunking_service import chunk_document
+                from app.services.vector_service import add_chunks_to_vector_store
+                chunks = chunk_document(text, document_id)
+                add_chunks_to_vector_store(chunks, document_id)
+                print(f"✅ ChromaDB embedding done for doc {document_id}")
+            except Exception as e:
+                print(f"ChromaDB skipped (not available): {e}")
 
+        # Always mark as processed regardless of ChromaDB
         document.status = "processed"
         db.commit()
-        print(f"✅ Document {document_id} processing complete")
+        print(f"✅ Document {document_id} marked as processed")
 
     except Exception as e:
-        print(f"Background processing error: {e}")
-        # Still mark as processed so user can use summarize/chat
+        print(f"Background error: {e}")
         try:
             document = db.query(DocModel).filter(DocModel.id == document_id).first()
             if document:
